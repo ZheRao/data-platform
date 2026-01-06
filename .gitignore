@@ -19,3 +19,6 @@ poetry*
 # Dev code
 notebooks/
 scripts/extract_input.sh
+
+# .pdf exports for .md files
+*.pdf
