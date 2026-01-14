@@ -1,7 +1,9 @@
 # QBO — Token Renewal Procedure
 
-**Frequency**: Quarterly
+**Frequency**: Quarterly  
 **Audience**: Internal / Engineer (Auth + Data Platform)
+
+---
 
 1. **Load Client Secrets**
     - Open `client_secrets.json`
