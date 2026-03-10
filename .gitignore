@@ -24,6 +24,6 @@ src/qbo_etl/dev/
 *.pdf
 
 # company info
-notebooks/
+notebooks_dev/
 src/qbo_etl/json_configs/io/
 src/qbo_etl/json_configs/contracts/
