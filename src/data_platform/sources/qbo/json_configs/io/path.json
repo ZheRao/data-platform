@@ -1,0 +1,11 @@
+{
+    
+    "root": "/home/zhe_rao/projects/Database/",
+    "bronze": {
+        "pl": "Bronze/QBO/ProfitAndLoss/",
+        "gl": "Bronze/QBO/GeneralLedger"
+    },
+    "silver": {
+        "pl": "Silver/QBO/Fact/ProfitAndLoss"
+    }
+}

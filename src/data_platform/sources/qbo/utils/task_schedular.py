@@ -1,5 +1,5 @@
 """
-src.data_platform.qbo.silver.task_schedular
+src.data_platform.sources.qbo.transformation.task_schedular
 
 Purpose:
     - create spark jobs as a list of dictionaries, so the meta-data (invariants) of each job is encoded into one single element of the list

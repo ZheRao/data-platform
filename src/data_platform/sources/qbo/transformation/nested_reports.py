@@ -1,5 +1,5 @@
 """
-src.qbo_etl.silver.nested_reports
+src.data_platform.sources.qbo.transformation.nested_reports
 
 Purpose:
     - ingest raw Bronze nested JSON data structure, convert into tabular format and write out as spark data frame in parquet format
