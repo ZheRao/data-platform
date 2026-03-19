@@ -25,5 +25,5 @@ src/data_platform/qbo/dev/
 
 # company info
 notebooks_dev/
-src/data_platform/qbo/json_configs/io/
-src/data_platform/qbo/json_configs/contracts/
+src/data_platform/sources/qbo/json_configs/io/
+src/data_platform/sources/qbo/json_configs/contracts/
