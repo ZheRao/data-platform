@@ -21,7 +21,8 @@ def read_configs(source_system: str, config_type: str, name: str) -> dict:
         - `config_type`: the config type e.g., "contracts"
         - `name`: the name of the config file e.g., "facts.json"
     """
-    path = files(f"data_platform.{source_system}.json_configs").joinpath(f"{config_type}/{name}")
+    p = f"data_platform.sources.{source_system}.json_configs" if source_system.lower() != "core" else f"data_platform.core.json_configs"
+    path = files(p).joinpath(f"{config_type}/{name}")
     return json.loads(path.read_text())
 
 
