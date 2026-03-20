@@ -130,11 +130,13 @@ def flatten_one_file(company:str, start:str, path:Path|str) -> Iterator[Dict[str
     if isinstance(path, str): path = Path(path)
     date_split = start.split("-")
     file_name = f"{company}/{date_split[0]}_{date_split[1].replace('0','')}.json"
-    with open(path / file_name, "rb") as f:
-        raw = f.read()
-    obj = orjson.loads(raw)
-    if obj.get("Rows", {}) and obj["Rows"].get("Row", []):
-        cols = _extract_column_meta(obj=obj)
-        for node in obj["Rows"]["Row"]:
-            yield from _crawler(node=node,columns=cols,company_info=company)
+    file_path = path / file_name
+    if file_path.exists():
+        with open(path / file_name, "rb") as f:
+            raw = f.read()
+        obj = orjson.loads(raw)
+        if obj.get("Rows", {}) and obj["Rows"].get("Row", []):
+            cols = _extract_column_meta(obj=obj)
+            for node in obj["Rows"]["Row"]:
+                yield from _crawler(node=node,columns=cols,company_info=company)
 
