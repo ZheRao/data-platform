@@ -7,9 +7,12 @@ Purpose:
 Exposed API:
     - `flatten_one_file()` - given `company`, `start`, `path`, load file, crawl through and yield all data nodes
 """
+
 from typing import Iterator, Dict
 import orjson
 from pathlib import Path
+
+from data_platform.sources.qbo.transformation.col_discovery import extract_column_meta
 
 def _identify_node_type(node: dict) -> str:
     """
@@ -103,19 +106,6 @@ def _crawler(node:dict, columns: list[str],  company_info:str, acc_info:dict[str
     else:
         raise ValueError(f"Unrecognized Node Type - node summary - {node['Summary']}")
     
-def _extract_column_meta(obj:dict) -> list[str]:
-    """
-    Purpose:
-        - input the dict object from reading JSON raw file
-        - extract and return the column names for the file
-        - error if column meta data is missing
-    """
-    try:
-        meta = obj["Columns"]["Column"]
-    except Exception as e:
-        raise KeyError("obj['Columns']['Column'] missing from PL JSON file") from e
-    cols = [item["ColTitle"].replace(" ", "_").replace("/", "_").lower() for item in meta]
-    return cols
     
 def flatten_one_file(company:str, start:str, path:Path|str) -> Iterator[Dict[str,str]]:
     """
@@ -136,7 +126,7 @@ def flatten_one_file(company:str, start:str, path:Path|str) -> Iterator[Dict[str
             raw = f.read()
         obj = orjson.loads(raw)
         if obj.get("Rows", {}) and obj["Rows"].get("Row", []):
-            cols = _extract_column_meta(obj=obj)
+            cols = extract_column_meta(obj=obj)
             for node in obj["Rows"]["Row"]:
                 yield from _crawler(node=node,columns=cols,company_info=company)
 
