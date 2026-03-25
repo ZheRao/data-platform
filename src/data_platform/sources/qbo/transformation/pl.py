@@ -22,18 +22,11 @@ from data_platform.core.engine.data_ops import create_fiscal_year
 from data_platform.core.utils.filesystem import read_configs
 
 from pyspark.sql import SparkSession, DataFrame as SparkDF, functions as F
-from typing import TypedDict
 from pathlib import Path
 
+from data_platform.sources.qbo.utils.contracts import TaskRecord
 
-class TaskDict(TypedDict):
-    company: str
-    start: str
-    end: str
-
-
-
-def transform_pl_spark(tasks: list[TaskDict], scope:range|list[int], spark:SparkSession, path_config:dict) -> SparkDF:
+def transform_pl_spark(tasks: list[TaskRecord], scope:range|list[int], spark:SparkSession, path_config:dict) -> SparkDF:
     """
     Purpose:
         - read raw JSON files, prepare tabulated PL report with Spark
