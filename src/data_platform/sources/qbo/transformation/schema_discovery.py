@@ -90,9 +90,10 @@ def compose_column_superset(tasks: list[TaskRecord], raw_path:Path|str) -> list[
         - iterate through all files involved in the task
         - compose a superset for all columns contained in the job
         - including adding `acc` columns and `*_id` columns
+        - including `corp`
     """
     if isinstance(raw_path,str): raw_path = Path(raw_path)
     columns = _discover_columns(tasks=tasks, raw_path=raw_path)
     final_columns = _add_id_columns(columns=columns)
-    final_columns = ["acc_id","acc_full"] + final_columns
+    final_columns = ["corp", "acc_id","acc_full"] + final_columns
     return final_columns
