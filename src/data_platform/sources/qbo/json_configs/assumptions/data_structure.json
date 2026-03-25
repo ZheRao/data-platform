@@ -1,7 +1,7 @@
 {
     "silver": {
         "nested_reports": {
-            "no_id_cols": ["date", "num", "#", "Memo_Description", "amount", "balance"]
+            "no_id_cols": ["date", "num", "#", "memo_description", "amount", "balance"]
         }
     }
 }
