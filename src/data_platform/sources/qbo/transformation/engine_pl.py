@@ -19,6 +19,7 @@ Notes:
 """
 from __future__ import annotations 
 from pyspark.sql import SparkSession, DataFrame as SparkDF, functions as F
+import pandas as pd
 from pathlib import Path
 
 from data_platform.core.engine.spark import generate_default_schema
