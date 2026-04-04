@@ -103,8 +103,6 @@ def transform_pl_pandas(tasks: list[TaskRecord], scope:range|list[int], path_con
         - one parquet per fiscal year
     Warning:
         - all data will be held in memory
-        - figure out how to append new records
-        - create check/create folder
     """
     # figure out the bronze path
     raw_path = Path(path_config["root"]) / path_config["bronze"]["pl"]
