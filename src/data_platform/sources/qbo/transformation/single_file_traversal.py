@@ -138,43 +138,7 @@ def _identify_node_type(node: dict) -> str:
     idx = header_meta.get("id", "")
     if idx: return "Account"
     else: return "Category"
-    
 
-
-def _identify_node_type_old(node: dict) -> str:
-    """
-    Purpose:
-        - input a node represented by 
-            - category or account node or parent account data node: a dictionary with 3-4 keys `['Header' (optional), 'Rows', 'Summary', 'type']`
-            - data node: a dictionary with 2 keys `['ColData', 'type']`
-            - summary node: a dictionary with 2 keys `['Summary', 'type']`
-        - output the exact node type
-            - `Category`, `Category End`, `Account`, `Data`, `Summary Only`, `Include Data For Parent`
-    """
-    node_type = node.get("type", "")
-    if node_type == "": raise ValueError(f"node['type'] is missing, and node type cannot be determined - node summary - {node['Summary']}")
-    # Data Node
-    if node_type == "Data": 
-        return "Data"
-    # summary node
-    if "Header" not in node.keys() and "Rows" not in node.keys():
-        return "Summary Only"
-    # only three keys in the dictionary
-    if "Header" not in node.keys():
-        if node.get("Rows", {}) == {}: return "Category End" # Category End Node without nested child records
-        else: return "Include Data For Parent" # subsequent transactions without header should inherit the account information here
-    # Account Node
-    header = node.get("Header", {})
-    if header == {}: raise ValueError(f"Trying to access Header for determining account node, node keys - {node.keys()} missing header - node summary - {node['Summary']}")
-    header_data = node["Header"].get("ColData", [])
-    if header_data == []: raise ValueError(f"Trying to access Header for determining account node, node keys - {node.keys()} missing header info - node summary - {node['Summary']}")
-    acc_id = header_data[0].get("id", "")
-    # if missing id, it is a category node with nested sub-records
-    if acc_id == "":
-        return "Category"
-    # if has id, it is an account node
-    else:
-        return "Account"
 
 def _extract_data_node(node: dict, columns: list[str], acc_info:dict[str,str], company_info:str) -> dict:
     """
