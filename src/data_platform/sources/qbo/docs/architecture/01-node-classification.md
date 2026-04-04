@@ -26,6 +26,7 @@ The system recognizes the following **closed set of node types**:
 - `Include Data For Parent`
 - `Category`
 - `Account`
+- `Unspecified Account`
 
 
 # Structural Patterns
@@ -69,7 +70,7 @@ Must satisfy:
 - `Rows["Row"]` is a non-empty `list`
 - `Summary` exists
 
-### 5 `Category`
+### 5. `Category`
 
 Structural grouping node.
 
@@ -78,7 +79,16 @@ Must satisfy:
 - `Header.ColData[0].id` is **missing**
 - `Rows["Row"]` is non-empty
 
-### 6. `Account`
+### 6. `Unspecified Account`
+
+Node representing a "Not Specified" account group
+
+Must satisfy:
+- `Header` exists
+- `Header.ColData[0].value` exists and equals `Not Specified`
+- `Rows["Row"]` is non-empty
+
+### 7. `Account`
 
 Node representing a specific account.
 
@@ -195,5 +205,5 @@ as the `obj_1["Header"]`
 
 And `obj_1["Rows"]["Row"][1]` is the first child account node with `obj_1["Rows"]["Row"][1]["Header"]` and transactions in `obj_1["Rows"]["Row"][1]["Rows"]["Row"]`
 
-
+scenario 7: account node with the name "Not Specified" and no "id" followed by transactions
 

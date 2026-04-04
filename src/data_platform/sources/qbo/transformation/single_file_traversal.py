@@ -32,6 +32,7 @@ def _identify_node_type(node: dict) -> str:
         - `Include Data For Parent`: transaction rows belonging to parent account (no header)
         - `Category`: grouping node without account identity
         - `Account`: node with account identity and nested transactions
+        - `Unspecified Account`: node with account identity and nested transactions but with "Not Specified" as value and no id
 
     Validation Model (Fail-Loud Ladder):
         1. Presence check → required keys must exist → `KeyError`
@@ -64,13 +65,15 @@ def _identify_node_type(node: dict) -> str:
             - no `Header`
             - `Rows["Row"]` exists and is a non-empty list
 
-        Category / Account:
+        Category / Account / Unspecified Account:
             - `Header` exists
             - `Header["ColData"]` is non-empty list
             - `Rows["Row"]` exists and is non-empty list
 
             Distinction:
                 - if `Header.ColData[0].id` exists → `Account`
+                - else if `Header.ColData[0].value == 'Not Specified'` → `Unspecified Account`
+                    - note: `Unspecified Account` currently is ignored
                 - else → `Category`
 
     Failure Behavior:
@@ -135,8 +138,11 @@ def _identify_node_type(node: dict) -> str:
     # check whether it is Account or Category node
     header_meta = coldata[0]
     if not isinstance(header_meta, dict): raise TypeError(f"expected elements in list of node['Header']['ColData'] to be dict, got {type(header_meta)} - node summary - {node_summary}")
+    val = header_meta.get("value")
+    if not val: raise KeyError(f"expected 'value' in Category/Account/Unspecified Account nodes, it is missing in - {node_summary}")
     idx = header_meta.get("id", "")
     if idx: return "Account"
+    elif val == "Not Specified": return "Unspecified Account"
     else: return "Category"
 
 
@@ -171,8 +177,8 @@ def _crawler(node:dict, columns: list[str],  company_info:str, acc_info:dict[str
         - `acc_info`: account info carried to consolidate with leaf node transaction, should not be provided, it would be overwritten anyway
     """
     node_type = _identify_node_type(node=node)
-    # for Category End or Summary Only node, end here
-    if node_type in ["Category End","Summary Only"]:
+    # for Category End or Summary Only node or Unspecified Account, end here
+    if node_type in ["Category End","Summary Only", "Unspecified Account"]:
         return
     # for Category node, just continue with sub nodes or end if no sub nodes
     elif node_type in ["Category", "Include Data For Parent"]:
