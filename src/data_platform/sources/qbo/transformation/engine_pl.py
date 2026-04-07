@@ -1,5 +1,5 @@
 """
-src.data_platform.sources.qbo.transformation.pl
+src.data_platform.sources.qbo.transformation.engine_pl
 
 Purpose:
     - transform ingested raw PL report from QBO
@@ -40,7 +40,7 @@ def transform_pl_spark(tasks: list[TaskRecord], scope:range|list[int], spark:Spa
         - `spark`: `SparkSession` object for performing actual spark jobs
         - `path_config`: the external path config JSON file, dictionary format
     Note:
-        - - missing `fiscal_year` (invalid date column) ignored in writes, but is included in returning df
+        - missing `fiscal_year` (invalid date column) ignored in writes, but is included in returning df
     """
 
     # figure out the bronze path
