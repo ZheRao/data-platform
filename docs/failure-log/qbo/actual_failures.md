@@ -63,3 +63,38 @@ All schemas must be explicitly discovered and unified prior to transformation.
 ### Notes
 Schema instability is not an edge case — it is a fundamental property of the source.
 
+## [2026-04-06] — Fiscal Year Calculation Failure for QBO GL
+
+### Context
+- Source: QBO API (GL reports)
+- Layer: Silver
+- Environment: PySpark (ANSI mode) & Pandas
+- Trigger: Malformed date values caused runtime failure
+
+### Problem
+GL reports include pseudo-data rows (e.g., `Beginning Balance`)  
+where `date_col` contains non-date strings while other fields remain valid.
+
+### Root Cause
+Fiscal year computation assumed all date values were parseable.  
+Under Spark ANSI mode, invalid parsing throws instead of returning null.
+
+### System Insight
+Structural validity does not imply semantic validity.  
+Field values may be unusable even when rows are correctly formed.
+
+### New / Updated Invariant
+Derivation logic must not assume input validity.  
+- Structural issues → fail loudly  
+- Value-level issues → fail gracefully (coerce + continue)
+
+### Implementation Change
+- Switched to tolerant date parsing (`try_cast` / coercion to null)
+- Computed `fiscal_year` only on valid parsed dates
+- Preserved invalid rows without dropping
+
+### Notes
+Pseudo-data rows are part of source behavior, not edge cases.  
+Avoid blacklist-based filtering; rely on positive validation instead.
+
+
