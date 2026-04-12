@@ -97,7 +97,24 @@ Partial or ambiguous classification leads to undefined behavior.
 **Violation Result**  
 Hidden logic branches and inconsistent outputs.
 
+## 7. Control-Plane / Data-Plane Separation
 
+**Invariant**  
+Control-plane state mutation must be completed before distributed execution begins.  
+Distributed workers may consume shared state, but must never mutate it.
+
+**Why**  
+Distributed systems (e.g., Spark) execute work in parallel, unordered, and retryable ways.  
+State mutation (e.g., auth refresh) is order-sensitive and must be single-writer to remain consistent.
+
+**Enforced By**
+- auth refresh as preflight step (driver-only)
+- atomic persistence of auth state
+- read-only broadcast of per-run auth snapshot
+- no mutation logic inside worker execution
+
+**Violation Result**  
+Race conditions, inconsistent state, and non-deterministic pipeline behavior.
 
 # Missing Invariants (Planned)
 
