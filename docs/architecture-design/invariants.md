@@ -97,6 +97,8 @@ Partial or ambiguous classification leads to undefined behavior.
 **Violation Result**  
 Hidden logic branches and inconsistent outputs.
 
+
+
 # Missing Invariants (Planned)
 
 These define future system hardening areas.
