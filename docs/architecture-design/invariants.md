@@ -116,6 +116,24 @@ State mutation (e.g., auth refresh) is order-sensitive and must be single-writer
 **Violation Result**  
 Race conditions, inconsistent state, and non-deterministic pipeline behavior.
 
+## 8. Config-as-Contract Validation
+
+**Invariant**  
+All external configuration must be validated as an explicit contract before being returned to downstream programs.
+
+**Why**  
+Manual correctness over many config files, paths, keys, and nested structures does not scale. As platform scope expands, relying on memory to maintain hundreds of knobs becomes a structural failure mode.
+
+**Enforced By**
+- missing-file checks with exact expected location
+- recursive required-key validation
+- nested structure/type validation
+- source-system-level config schema definitions
+- fail-loud config boundary before execution
+
+**Violation Result**  
+Downstream failures become detached from their true cause, making missing or malformed config extremely difficult to diagnose.
+
 # Missing Invariants (Planned)
 
 These define future system hardening areas.

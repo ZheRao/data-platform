@@ -76,3 +76,62 @@ Auth refresh is inherently single-writer and order-sensitive, while Spark execut
 ### Notes
 
 Prevents race conditions, inconsistent auth state, and non-deterministic pipeline behavior under Spark execution.
+
+## [2026-05-02] — Missing / Invalid Config Assumptions Across Expanding Platform Scope
+
+### Context
+- Source: All source systems
+- Layer: Configuration / Control Plane
+- Component: `read_configs` + config validation layer
+
+### Risk
+
+As the platform expands into new source systems, scenarios, contracts, paths, entities, and execution modes, the system may assume many external JSON config files exist and contain the correct nested keys.
+
+If a config file is missing, incomplete, incorrectly named, or structurally wrong, downstream code may fail far away from the actual cause.
+
+This would make failures difficult to diagnose because the platform depends on many small configuration pieces distributed across the repo.
+
+### Root Cause
+
+Configuration was being treated as an implicit assumption instead of an explicit contract.
+
+The system assumed:
+- required config files exist
+- expected keys are present
+- nested structures are correct
+- key names match downstream program expectations
+
+At small scale, these assumptions can be manually remembered.  
+At platform scale, this becomes unsafe.
+
+### System Insight
+
+Manual correctness over many configuration knobs does not scale.
+
+As the number of source systems, scenarios, contracts, paths, and config files grows, relying on human memory to keep everything aligned becomes a structural failure mode.
+
+A platform must assume larger future scope and reject incomplete or malformed configuration before execution begins.
+
+### New / Updated Invariant
+
+- External configuration must be treated as a contract, not a convenience file
+- Missing config files must fail loudly with the exact expected location and filename
+- Config files must be validated before being returned to downstream programs
+- Required keys must be checked recursively, including nested JSON structures
+- Invalid config shape must fail at the config boundary, not later in business logic
+- Manual handling of many configuration knobs is forbidden as a correctness strategy
+
+### Implementation Change
+
+- Updated `read_configs` to check whether the requested config file exists before reading it
+- Added contextual error messages showing the exact expected config path
+- Added a config validation layer based on source-system-level schema definitions
+- Added recursive required-key validation for nested JSON structures
+- Changed config loading so that returned configs are guaranteed to satisfy expected structural requirements
+
+### Notes
+
+Prevents hidden missing-config failures, wrong-key failures, nested-structure mismatches, and downstream crashes caused by incomplete control-plane setup.
+
+This turns configuration from scattered assumptions into an explicit validated interface.
