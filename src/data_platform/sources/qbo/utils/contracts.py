@@ -8,6 +8,7 @@ Exposed API:
     - `read_tokens()`   - load token file and convert it into `dict[str, TokenState]`
     - `write_tokens()`  - hierarchically write `dict[str, TokenState]` into a JSON file
     - `read_secrets()` - load workspace client ID and secrets and convert it into `dict[str, AuthCredentials]`
+    - `construct_workspace_config()` - link workspace secrets with included entities
 
 Exposed Structures:
     - ingestion contracts:
@@ -24,7 +25,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 import json
 
-from data_platform.core.utils.filesystem import atomic_write_bytes
+from data_platform.core.utils.filesystem import atomic_write_bytes, read_configs
 
 class TaskRecord(TypedDict):
     company: str
@@ -45,7 +46,6 @@ class TokenState:
 
 @dataclass(frozen=True)
 class WorkspaceAuthConfig:
-    workspace_name: str
     credentials: AuthCredentials
     included_entities: tuple[str, ...]
 
@@ -90,5 +90,50 @@ def read_secrets(secret_path: Path) -> dict[str, AuthCredentials]:
         workspace_name: AuthCredentials(**secrets)
         for workspace_name, secrets in raw.items()
     }
+
+def construct_workspace_config(secret_path:Path) -> dict[str,WorkspaceAuthConfig]:
+    """
+    Input:
+        - `secret_path`: path to where workspace/secrets are stored, should end in `.json`
+    Output:
+        - a dictionary contains `workspace_name` as key and `WorkspaceAuthConfig` objects as values that contains
+            - credentials: `AuthCredentials` objects
+            - included_entities: list of entity names as string
+    Note:
+        - the `AuthCredentials` that contains `client_id`, `client_secret` came from secret file (top-level shape: dict[str, AuthCredentials])
+        - the `WorkspaceAuthConfig.included_entities` came from external config (top-level shape: dict[str, list[str]])
+        - the `workspace_name` (top-level keys) from secrets file must match `workspace_name` (top-level keys) from external config about workspace entity 
+    """
+    secrets = read_secrets(secret_path=secret_path)
+    workspace_entity_config = read_configs(source_system="qbo",config_type="contracts", name="workspace_entity.json")
+    external_config_keys = workspace_entity_config.keys()
+    secrets_keys = secrets.keys()
+    not_in_secrets = list(set(external_config_keys) - set(secrets_keys))
+    if not_in_secrets: 
+        raise ValueError(
+            f"Inconsistent/missing workspace naming. \n\n"
+            f"Workspace names in 'qbo/json_configs/contracts/workspace_entity.json' but not in secret file: \n"
+            f"  missing_names = '{not_in_secrets}'\n"
+            f"  full_names_in_config = '{list(external_config_keys)}'\n"
+            f"  full_names_in_secret = '{list(secrets_keys)}'\n"
+            f"Please ensure the workspace naming is consistent or add missing names for secret file at '{secret_path}'"
+        )
+    not_in_config = list(set(secrets_keys) - set(external_config_keys))
+    if not_in_config:
+        raise ValueError(
+            f"Inconsistent/missing workspace naming. \n\n"
+            f"Workspace names in in secret file but not in 'qbo/json_configs/contracts/workspace_entity.json': \n"
+            f"  missing_names = '{not_in_config}'\n"
+            f"  full_names_in_config = '{list(external_config_keys)}'\n"
+            f"  full_names_in_secret = '{list(secrets_keys)}'\n"
+            f"Please ensure the workspace naming is consistent or add missing names for workspace config at 'qbo/json_configs/contracts/workspace_entity.json'"
+        )
+    workspace  = {}
+    for workspace_name in secrets_keys:
+        workspace_object = WorkspaceAuthConfig(credentials=secrets[workspace_name], included_entities=workspace_entity_config[workspace_name])
+        workspace.update({workspace_name:workspace_object})
+    return workspace
+
+
     
 
