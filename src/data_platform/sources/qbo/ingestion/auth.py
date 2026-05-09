@@ -12,7 +12,7 @@ from pathlib import Path
 from collections import Counter
 from intuitlib.client import AuthClient
 
-from data_platform.sources.qbo.utils.contracts import AuthCredentials, TokenState, WorkspaceAuthConfig, write_tokens
+from data_platform.sources.qbo.utils.contracts import AuthCredentials, TokenState, WorkspaceAuthConfig, write_tokens, read_tokens
 
 def refresh_entity(client: AuthCredentials, old_token_state: TokenState) -> TokenState:
     """
@@ -43,20 +43,22 @@ def refresh_entity(client: AuthCredentials, old_token_state: TokenState) -> Toke
 
 def refresh_auth(
     workspace: dict[str,WorkspaceAuthConfig],
-    token_dict: dict[str, TokenState],
     token_path: Path,
     rotate_all: bool = True,
     entities_to_rotate_input: list[str]|None = None,
 ) -> dict[str, TokenState]:
     """
+    Purpose:
+        - given scope, read tokens, rotate, write tokens, then return tokens
     Input:
         - `workspace`: a dictionary where keys are workspace names and values are `WorkspaceAuthConfig` objects containing secrets to the workspace
-        - `token_dict`: a dictionary where keys are entity names and values are `TokenState` objects containing auth tokens to the entities
+            - `construct_workspace_config(...)` from `data_platform.sources.qbo.utils.contracts` produces the desired input shape
         - `token_path`: path to store the token file
         - `rotate_all`: whether to rotate all workspace and all entities contained inside each workspace
         - `entities_to_rotate_input`: a list of entity names to refresh, default `None`
     Output:
         - a dictionary of `entity names : TokenState` with rotated auth tokens
+        - the output is persisted by atomic write to token_path
     Note:
         - function will check and raise errors for the following scenarios
             0. An entity belongs to more than one workspaces.
@@ -68,6 +70,8 @@ def refresh_auth(
         - function will check all conditions first before any token rotation
         - function will write immediately after every rotate to avoid stale file state preventing future re-rotate
     """
+    # read token_dict
+    token_dict = read_tokens(token_path=token_path)
     # validation
     entities_workspace = []
     for workspace_name, workspace_config in workspace.items():
