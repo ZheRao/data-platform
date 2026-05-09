@@ -13,7 +13,6 @@ __pycache__/
 **/__pycache__/
 *.py[cod]
 .venv/
-poetry*
 .python-version
 
 # Dev code
