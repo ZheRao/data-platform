@@ -1,412 +1,651 @@
-# Controlled Task Planner
+# 03 — Controlled Task Planner
 
 ## Core Idea
 
-The platform should not execute ingestion or transformation logic directly from loosely-coupled loops and nested control flow.
+The platform should separate:
 
-Instead, every unit of work must first be converted into an explicit, deterministic **task object** containing the minimum metadata required for execution.
-
-The system operates in two stages:
-
-```text
-Planning
-    ↓
-Execution
+```text id="08r3h2"
+generic workload scope planning
 ```
 
-This separation is a foundational architectural invariant for the platform.
+from:
+
+```text id="vhxmpf"
+source-specific and operation-specific task enrichment
+```
+
+The planner is not merely responsible for:
+
+```text id="86ktmy"
+creating tasks before execution
+```
+
+The platform already follows that pattern.
+
+The deeper architectural goal is:
+
+```text id="d6p9hs"
+plan workload scope once
+reuse and enrich many times
+```
+
+instead of allowing each layer to independently recreate workload boundaries.
 
 
-## Why This Exists
+## Problem
 
-Early ingestion implementations fused many responsibilities together:
-
-* iteration over companies
-* iteration over fiscal periods
-* HTTP request construction
-* pagination
-* response parsing
-* file path construction
-* writes
-* flattening logic
-* logging
+Early implementations tend to duplicate planning logic across multiple systems.
 
 Example anti-pattern:
 
-```python
+```python id="glv6bo"
+## ingestion
 for company in companies:
     for quarter in quarters:
-        response = requests.get(...)
-        json.dump(...)
+        ingest(...)
+
+## flatten
+for company in companies:
+    for quarter in quarters:
         flatten(...)
 ```
 
-This tightly couples:
+Both systems independently recreate:
 
-```text
-WHAT should be executed
-with
-HOW it is executed
-```
-
-As the platform grows, this creates major problems:
-
-* difficult to parallelize
-* difficult to retry safely
-* difficult to validate execution scope
-* difficult to distribute to Spark workers
-* difficult to isolate failures
-* difficult to reuse planning logic across Bronze/Silver layers
-* difficult to reason about operational state
-
-The Controlled Task Planner separates these concerns.
-
-
-## Architectural Principle
-
-### The planner defines scope.
-
-### The engine performs execution.
-
-The planner determines:
-
-```text
-- what company
-- what dataset
-- what period
-- what source
-- what output target
-```
-
-The engine only performs work against already-defined tasks.
-
-
-## Task-Based Architecture
-
-### Phase 1 — Planning
-
-Planning converts abstract workload definitions into explicit task metadata.
-
-Example:
-
-```text
-Pull PL reports for:
-- Company A
-- FY2025
-- quarter grain
-```
-
-becomes:
-
-```python
-{
-    "company": "A",
-    "dataset": "ProfitAndLossDetail",
-    "start": "2024-10-01",
-    "end": "2024-12-31",
-}
-```
-
-Each task represents one independent execution unit.
-
-
-### Phase 2 — Execution
-
-Execution engines operate only on prepared tasks.
-
-Example:
-
-```python
-for task in tasks:
-    run_task(task)
-```
-
-This allows:
-
-* local Python execution
-* multiprocessing
-* Spark distribution
-* retry systems
-* future orchestration frameworks
-
-without changing planning logic.
-
-
-## Core Invariant
-
-### Every execution unit must be representable as an explicit task before execution begins.
-
-This is one of the most important invariants in the platform.
-
-The system should never rely on hidden runtime iteration state.
-
-Bad:
-
-```python
-for year in years:
-    for company in companies:
-        ...
-```
-
-inside business logic.
-
-Good:
-
-```python
-tasks = create_tasks(...)
-run(tasks)
-```
-
-The task list itself becomes the explicit representation of workload scope.
-
-
-## Separation of Concerns
-
-The planner must not perform execution.
-
-The executor must not decide scope.
-
-
-### Planner Responsibilities
-
-The planner is responsible for:
-
-* determining execution scope
-* period slicing
-* task metadata generation
-* fiscal calendar awareness
+* fiscal period logic
+* date boundaries
+* company scope
 * workload partitioning
-* deterministic task identity
-
-The planner does NOT:
-
-* perform HTTP calls
-* write files
-* parse responses
-* flatten JSON
-* run Spark transformations
-
-
-### Executor Responsibilities
-
-The executor is responsible for:
-
-* performing HTTP requests
-* reading files
-* writing files
-* flattening payloads
-* Spark transformations
-* retries
-* logging execution results
-
-The executor does NOT:
-
-* decide fiscal scope
-* determine which periods to run
-* determine workload boundaries
-
-
-## Shared Planning Across Layers
-
-One of the key realizations is that Bronze ingestion and Silver flattening share the same execution scope.
-
-Example:
-
-```text
-Company A
-FY2025
-Quarter 1
-```
-
-is simultaneously:
-
-* a Bronze ingestion scope
-* a Silver flattening scope
-* potentially a validation scope
-* potentially a reconciliation scope
-
-Therefore:
-
-### period planning should be reusable across layers
-
-instead of duplicated independently.
-
-
-## Generic Planning Layer
-
-The reusable invariant is not:
-
-```text
-"PL ingestion"
-```
-
-The reusable invariant is:
-
-```text
-"time-scoped workload partitioning"
-```
-
-This becomes a generic platform mechanism.
-
-
-## Example Task Hierarchy
-
-### Base Period Task
-
-```python
-{
-    "company": "A",
-    "dataset": "ProfitAndLossDetail",
-    "start": "2024-10-01",
-    "end": "2024-12-31",
-    "fiscal_year": 2025,
-}
-```
-
-This represents generic scope only.
-
-
-### Bronze Ingestion Task
-
-```python
-{
-    "company": "A",
-    "dataset": "ProfitAndLossDetail",
-    "start": "2024-10-01",
-    "end": "2024-12-31",
-    "out_path": "...",
-    "source": "qbo",
-}
-```
-
-Adds execution metadata for ingestion.
-
-
-### Silver Flatten Task
-
-```python
-{
-    "company": "A",
-    "dataset": "ProfitAndLossDetail",
-    "start": "2024-10-01",
-    "end": "2024-12-31",
-    "in_path": "...",
-    "out_path": "...",
-}
-```
-
-Adds execution metadata for flattening.
-
-
-## Why This Matters for Spark
-
-Spark requires workload partitionability.
-
-A task-based design naturally supports distribution because:
-
-```text
-each task is independent
-```
-
-Instead of Spark workers trying to infer workload dynamically, the planner pre-defines execution units explicitly.
+* filtering rules
 
 This creates:
 
-* deterministic workload boundaries
-* safe retries
-* easier monitoring
-* easier failure isolation
-* future scalability
+* duplicated logic
+* inconsistent scope definitions
+* harder maintenance
+* harder orchestration
+* harder scaling
+* harder operational reasoning
+
+The problem is not execution.
+
+The problem is duplicated workload planning.
 
 
-## Controlled Scope
+# Architectural Principle
 
-A major purpose of the planner is controlling blast radius.
+### Workload scope should be planned once at the platform core level.
+
+Then downstream systems enrich the scope with:
+
+* source-specific context
+* operation-specific context
+* execution-specific metadata
+
+
+## Main Invariant
+
+```text id="kh65ql"
+scope is planned once
+context is layered incrementally
+```
+
+instead of:
+
+```text id="g3c78j"
+every system independently recreates workload boundaries
+```
+
+
+# Planning Layers
+
+The planner architecture evolves in layers.
+
+
+## Layer 1 — Core Scope Planner
+
+The core planner creates neutral workload scope.
+
+It does NOT know about:
+
+* QBO
+* HTTP
+* Bronze
+* Silver
+* ingestion
+* flattening
+* Spark
+
+It only defines:
+
+* company
+* dataset
+* start date
+* end date
+* fiscal year
+* period grain
+
+The planner therefore belongs in platform core because it represents:
+
+```text id="y17yvg"
+time-scoped workload partitioning
+```
+
+which is a platform-level invariant.
+
+
+## Why Period Grain Must Be Generic
+
+The core planner must NOT assume:
+
+```text id="9a1mnr"
+quarter
+```
+
+as the only workload partitioning strategy.
+
+Different systems may require:
+
+* daily partitions
+* monthly partitions
+* quarterly partitions
+* yearly partitions
+* custom ranges
+
+Therefore:
+
+```text id="djlwm6"
+period grain is configuration
+not a platform assumption
+```
 
 Example:
 
-Instead of:
-
-```text
-reload all historical data every refresh
+```python id="gfl7mc"
+period_grain="month"
 ```
 
-the planner can define:
+or:
 
-```text
-FY2025 only
-Current quarter only
-One company only
-Specific report only
+```python id="0k1k56"
+period_grain="quarter"
 ```
 
-This makes ingestion bounded and predictable.
+The source layer or operation layer chooses the appropriate grain.
+
+Example:
+
+```text id="h84l0i"
+QBO PL → quarter
+raw incremental ingestion → month
+daily monitoring → day
+```
 
 
-## Future Evolution
+## Core Scope Contract
 
-The planner is expected to evolve into more advanced workload definitions.
+The core planner produces a reusable scope contract.
+
+Example:
+
+```python id="8n7oqr"
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Literal
+
+
+@dataclass(frozen=True)
+class PeriodScopeTask:
+    company: str
+    dataset: str
+
+    start: str
+    end: str
+
+    fiscal_year: int
+
+    period_grain: Literal[
+        "day",
+        "month",
+        "quarter",
+        "year",
+        "custom",
+    ]
+```
+
+This represents generic workload scope only.
+
+
+## Why `dataclass` Instead of `TypedDict`
+
+The planner uses `dataclass` contracts instead of `TypedDict`.
+
+Example:
+
+```python id="pryjlwm"
+@dataclass(frozen=True)
+class PeriodScopeTask:
+    ...
+```
+
+instead of:
+
+```python id="e3rprm"
+class PeriodScopeTask(TypedDict):
+    ...
+```
+
+because planning contracts represent:
+
+```text id="97k4rt"
+platform-level domain structures
+```
+
+not merely transport dictionaries.
+
+Benefits of `dataclass`:
+
+* stronger structural meaning
+* immutable contracts (`frozen=True`)
+* easier future validation
+* better architectural clarity
+* clearer system boundaries
+* easier contract evolution
+
+
+## When `TypedDict` Is Still Useful
+
+`TypedDict` remains useful at execution boundaries.
+
+Example:
+
+* Spark task payloads
+* JSON serialization
+* transport-oriented metadata
+
+Recommended platform pattern:
+
+```text id="6rkhrm"
+core planning → dataclass contracts
+execution boundary → convert to dictionaries
+```
+
+Example:
+
+```python id="bpcn6e"
+from dataclasses import asdict
+
+spark_tasks = [
+    asdict(task)
+    for task in period_tasks
+]
+```
+
+This preserves:
+
+* strong platform contracts internally
+* lightweight execution payloads externally
+
+
+## Core Scope Planner Example
+
+Example implementation:
+
+```python id="fjh6yb"
+from __future__ import annotations
+
+import datetime as dt
+
+from dataclasses import dataclass
+from typing import Literal, Optional, Sequence
+
+
+@dataclass(frozen=True)
+class PeriodScopeTask:
+    company: str
+    dataset: str
+
+    start: str
+    end: str
+
+    fiscal_year: int
+
+    period_grain: Literal[
+        "day",
+        "month",
+        "quarter",
+        "year",
+        "custom",
+    ]
+
+
+_LAST_DAY = {
+    3: 31,
+    6: 30,
+    9: 30,
+    12: 31,
+}
+
+
+def infer_fiscal_year(
+    date_value: dt.date,
+    fiscal_year_start_month: int = 10,
+) -> int:
+
+    if date_value.month >= fiscal_year_start_month:
+        return date_value.year + 1
+
+    return date_value.year
+
+
+def create_quarter_scope_tasks(
+    *,
+    companies: Sequence[str],
+    dataset: str,
+    fiscal_years: Sequence[int],
+    fiscal_year_start_month: int = 10,
+) -> list[PeriodScopeTask]:
+
+    tasks: list[PeriodScopeTask] = []
+
+    quarter_start_months = (1, 4, 7, 10)
+
+    for company in companies:
+
+        for year in fiscal_years:
+
+            for month in quarter_start_months:
+
+                start = dt.date(year, month, 1)
+
+                end_month = month + 2
+
+                end = dt.date(
+                    year,
+                    end_month,
+                    _LAST_DAY[end_month],
+                )
+
+                tasks.append(
+                    PeriodScopeTask(
+                        company=company,
+                        dataset=dataset,
+
+                        start=start.isoformat(),
+                        end=end.isoformat(),
+
+                        fiscal_year=infer_fiscal_year(
+                            start,
+                            fiscal_year_start_month,
+                        ),
+
+                        period_grain="quarter",
+                    )
+                )
+
+    return tasks
+```
+
+
+## Layer 2 — Source Enrichment
+
+After generic scope is created, the source layer adds source-specific meaning.
+
+Example:
+
+```python id="0l1h9d"
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class QboTask:
+    scope: PeriodScopeTask
+
+    source: str
+    source_dataset: str
+
+    minor_version: int
+```
+
+Example enrichment:
+
+```python id="9krcjc"
+def enrich_qbo_context(
+    tasks: list[PeriodScopeTask],
+    *,
+    source_dataset: str,
+    minor_version: int = 75,
+) -> list[QboTask]:
+
+    return [
+        QboTask(
+            scope=task,
+
+            source="qbo",
+
+            source_dataset=source_dataset,
+
+            minor_version=minor_version,
+        )
+        for task in tasks
+    ]
+```
+
+
+## Layer 3 — Operation Enrichment
+
+Operations then enrich the source task with execution-specific metadata.
 
 Examples:
 
-### Current
+* Bronze ingestion
+* Silver flattening
+* validation
+* reconciliation
 
-```text
-quarter-based scoped pulls
+All operations reuse the same underlying scope.
+
+
+## Bronze Ingestion Example
+
+```python id="tv3u1w"
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class QboIngestionTask:
+    qbo_task: QboTask
+
+    operation: str
+    layer: str
+
+    out_path: str
 ```
 
-### Future
+Example enrichment:
 
-```text
-incremental pulls by MetaData.LastUpdatedTime
+```python id="q0y4ko"
+def enrich_ingestion_context(
+    tasks: list[QboTask],
+    *,
+    bronze_root: str,
+) -> list[QboIngestionTask]:
+
+    enriched_tasks: list[QboIngestionTask] = []
+
+    for task in tasks:
+
+        scope = task.scope
+
+        year, month, _ = scope.start.split("-")
+
+        out_path = (
+            f"{bronze_root}/"
+            f"QBO/"
+            f"{scope.dataset}/"
+            f"company={scope.company}/"
+            f"year={year}/"
+            f"month={month}/"
+            f"raw.json"
+        )
+
+        enriched_tasks.append(
+            QboIngestionTask(
+                qbo_task=task,
+
+                operation="ingest",
+                layer="bronze",
+
+                out_path=out_path,
+            )
+        )
+
+    return enriched_tasks
 ```
 
-### Future
 
-```text
-backfill tasks
+## Silver Flatten Example
+
+```python id="9b4r1m"
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class QboFlattenTask:
+    qbo_task: QboTask
+
+    operation: str
+    layer: str
+
+    in_path: str
+    out_path: str
 ```
 
-### Future
+Example enrichment:
 
-```text
-reconciliation tasks
+```python id="e4j1f9"
+def enrich_flatten_context(
+    tasks: list[QboTask],
+    *,
+    bronze_root: str,
+    silver_root: str,
+) -> list[QboFlattenTask]:
+
+    enriched_tasks: list[QboFlattenTask] = []
+
+    for task in tasks:
+
+        scope = task.scope
+
+        year, month, _ = scope.start.split("-")
+
+        in_path = (
+            f"{bronze_root}/"
+            f"QBO/"
+            f"{scope.dataset}/"
+            f"company={scope.company}/"
+            f"year={year}/"
+            f"month={month}/"
+            f"raw.json"
+        )
+
+        out_path = (
+            f"{silver_root}/"
+            f"QBO/"
+            f"{scope.dataset}/"
+            f"company={scope.company}/"
+            f"fiscal_year={scope.fiscal_year}"
+        )
+
+        enriched_tasks.append(
+            QboFlattenTask(
+                qbo_task=task,
+
+                operation="flatten",
+                layer="silver",
+
+                in_path=in_path,
+                out_path=out_path,
+            )
+        )
+
+    return enriched_tasks
 ```
 
-### Future
 
-```text
-validation-only tasks
+## Full Planning Flow
+
+The full planning flow becomes:
+
+```python id="mx3rm7"
+scope_tasks = create_quarter_scope_tasks(
+    companies=companies,
+    dataset="ProfitAndLossDetail",
+    fiscal_years=[2025, 2026],
+)
+
+qbo_tasks = enrich_qbo_context(
+    scope_tasks,
+    source_dataset="ProfitAndLossDetail",
+)
+
+ingestion_tasks = enrich_ingestion_context(
+    qbo_tasks,
+    bronze_root="Bronze",
+)
+
+flatten_tasks = enrich_flatten_context(
+    qbo_tasks,
+    bronze_root="Bronze",
+    silver_root="Silver",
+)
 ```
 
-The architectural invariant remains unchanged:
 
-```text
-plan first
-execute second
+## Why This Architecture Matters
+
+This architecture creates:
+
+* reusable planning logic
+* coherent workload boundaries
+* deterministic execution scope
+* easier Spark distribution
+* easier retries
+* easier orchestration
+* lower maintenance cost
+* cleaner system boundaries
+
+Most importantly:
+
+```text id="9g7sj4"
+the platform gains a unified workload language
 ```
+
+where ingestion, flattening, validation, reconciliation, and future systems all operate on the same foundational scope model.
 
 
 ## Design Philosophy
 
 The Controlled Task Planner exists because:
 
-```text
-explicit systems scale better than implicit iteration
+```text id="0gvjma"
+workload scope is a platform invariant
+not an operation-specific implementation detail
 ```
 
-The platform should make workload boundaries visible, deterministic, and auditable before execution begins.
+Therefore:
 
-This improves:
+```text id="pv3xkz"
+scope planning belongs in platform core
+execution semantics belong downstream
+```
 
-* scalability
-* correctness
-* observability
-* debuggability
-* recoverability
-* distribution
-* operational coherence
+The platform should therefore:
 
-The planner is therefore not just a utility mechanism.
+```text id="k3vjn6"
+centralize workload planning
+specialize execution later
+```
 
-It is a foundational orchestration layer for the platform.
+This creates a scalable orchestration foundation for the entire platform.
